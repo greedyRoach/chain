@@ -100,7 +100,7 @@ export default class Sqlite {
 
   async getHabits(onDone) {
     let today = new Date()
-    today.setTime(0,0,0,0)
+    today.setHours(0, 0, 0, 0);
 
     this.#db.transaction((tx) => {
       tx.executeSql(
@@ -109,6 +109,7 @@ export default class Sqlite {
             habit.name as name,
             habit.habit_id as habit_id,
             identity.name as identity_name,
+            identity.weight as identity_weight,
             (repetition_id is not null) as started,
             (
               SELECT
