@@ -1,6 +1,6 @@
 import * as SQLite from "expo-sqlite";
 
-const dbName = "DB.CHAIN.TEST";
+const dbName = "CHAIN.V3.2";
 
 export default class Sqlite {
   #db;
@@ -24,6 +24,7 @@ export default class Sqlite {
         `
           CREATE table if not exists identity (
             identity_id integer primary key not null,
+            weight integer not null default 0,
             name text unique not null
           );
         `,
@@ -38,11 +39,18 @@ export default class Sqlite {
         `
           CREATE table if not exists habit (
             habit_id INTEGER PRIMARY KEY,
-            name TEXT not null,
-            weigth INTEGER NOT NULL DEFAULT 0,
-            identity_id INTEGER,
+            name TEXT UNIQUE NOT NULL,
+            mon INTEGER NOT NULL DEFAULT 0,
+            tue INTEGER NOT NULL DEFAULT 0,
+            wen INTEGER NOT NULL DEFAULT 0,
+            thu INTEGER NOT NULL DEFAULT 0,
+            fri INTEGER NOT NULL DEFAULT 0,
+            sat INTEGER NOT NULL DEFAULT 0,
+            sun INTEGER NOT NULL DEFAULT 0,
+            identity_id INTEGER NOT NULL,
             FOREIGN KEY (identity_id)
               REFERENCES identity (identity_id)
+              ON DELETE CASCADE
           );
         `,
         null,
@@ -61,23 +69,13 @@ export default class Sqlite {
             habit_id INTEGER NOT NULL,
             FOREIGN KEY (habit_id)
               REFERENCES habit (habit_id)   
+              ON DELETE CASCADE
           );
         `,
         null,
         onDone,
         (_, error) => {
           console.log("error db habit_repetition", error);
-        }
-      );
-
-      tx.executeSql(
-        `
-          ALTER TABLE identity ADD COLUMN weight integer not null default 0
-        `,
-        null,
-        () => {},
-        (_, error) => {
-          console.log("error db alter identity table", error);
         }
       );
     });
@@ -98,9 +96,32 @@ export default class Sqlite {
     });
   }
 
-  async getHabits(onDone) {
-    let today = new Date()
-    today.setHours(0, 0, 0, 0);
+  async getHabits(onDone, date = new Date()) {
+    date.setHours(0, 0, 0, 0);
+    let dayQuerie = "";
+    switch (date.getDay()) {
+      case 0:
+        dayQuerie = "habit.sun = 1";
+        break;
+      case 1:
+        dayQuerie = "habit.mon = 1";
+        break;
+      case 2:
+        dayQuerie = "habit.tue = 1";
+        break;
+      case 3:
+        dayQuerie = "habit.wen = 1";
+        break;
+      case 4:
+        dayQuerie = "habit.thu = 1";
+        break;
+      case 5:
+        dayQuerie = "habit.fri = 1";
+        break;
+      case 6:
+        dayQuerie = "habit.sat = 1";
+        break;
+    }
 
     this.#db.transaction((tx) => {
       tx.executeSql(
@@ -109,28 +130,46 @@ export default class Sqlite {
             habit.name as name,
             habit.habit_id as habit_id,
             identity.name as identity_name,
-            identity.weight as identity_weight,
-            (repetition_id is not null) as started,
-            (
-              SELECT
-                SUM(end) - SUM(init)
-              FROM habit_repetition
-                WHERE init >= ? and habit_id = habit.habit_id and end is not null
-            ) / 60 / 1000 as total_today
+            identity.weight as identity_weight
           FROM
-            habit LEFT JOIN
-            identity ON habit.identity_id = identity.identity_id LEFT JOIN (
-              SELECT
-                habit_id,
-                repetition_id
-              FROM habit_repetition
-              WHERE end is null
-            ) habit_repetition ON habit_repetition.habit_id = habit.habit_id
+            habit INNER JOIN
+            identity ON habit.identity_id = identity.identity_id
+          WHERE 
+            ${dayQuerie}
         `,
-        [today.getTime()],
-        onDone,
+        [],
+        (_, { rows: { _array } }) => onDone(_array),
         (_, error) => {
           console.log("error getHabits", error);
+        }
+      );
+    });
+  }
+
+  async getRepetitions(onDone, date = new Date()) {
+    date.setHours(0, 0, 0, 0);
+
+    this.#db.transaction((tx) => {
+      tx.executeSql(
+        `
+          SELECT
+            habit.habit_id as habit_id,
+            habit.name as habit_name,
+            identity.identity_id as identity_id,
+            identity.name as identity_name,
+            habit_repetition.init,
+            habit_repetition.end
+          FROM
+            habit INNER JOIN
+            identity ON habit.identity_id = identity.identity_id INNER JOIN 
+            habit_repetition ON habit_repetition.habit_id = habit.habit_id
+          WHERE 
+            habit_repetition.init >= ?
+        `,
+        [date.getTime()],
+        (_, { rows: { _array } }) => onDone(_array),
+        (_, error) => {
+          console.log("error getRepetitions", error);
         }
       );
     });
@@ -155,9 +194,29 @@ export default class Sqlite {
     this.#db.transaction((tx) => {
       tx.executeSql(
         `
-          INSERT INTO habit (name, identity_id) values (?, ?)
+          INSERT INTO habit (
+            name, 
+            identity_id,
+            mon,
+            tue,
+            wen,
+            thu,
+            fri,
+            sat,
+            sun
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
-        [habit.name, habit.identity_id],
+        [
+          habit.name,
+          habit.identity_id,
+          habit.mon,
+          habit.tue,
+          habit.wen,
+          habit.thu,
+          habit.fri,
+          habit.sat,
+          habit.sun,
+        ],
         onDone,
         (_, error) => {
           console.log("error createHabit", error);
@@ -167,8 +226,7 @@ export default class Sqlite {
   }
 
   async startHabit(habitId, onDone) {
-    const now = new Date()
-    console.log();
+    const now = new Date();
     this.#db.transaction((tx) => {
       tx.executeSql(
         `
@@ -184,8 +242,7 @@ export default class Sqlite {
   }
 
   async stopHabit(onDone) {
-    const now = new Date()
-    console.log();
+    const now = new Date();
     this.#db.transaction((tx) => {
       tx.executeSql(
         `

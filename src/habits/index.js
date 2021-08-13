@@ -88,8 +88,30 @@ export default function Home({ navigation }) {
   }, [navigation]);
 
   const loadHabits = () => {
-    sqlite.getHabits((_, { rows: { _array } }) => {
-      setHabits(_array);
+    sqlite.getHabits((habits) => {
+      sqlite.getRepetitions((repetitions) => {
+        const today = new Date();
+        for (const habit of habits) {
+          habit.repetitions = repetitions
+            .filter((rep) => rep.habit_id == habit.habit_id)
+            .sort((a, b) => {
+              if (a.end == false) return 1;
+              else if (b.end == false) return -1;
+              return a.init - b.init;
+            });
+          if (habit.repetitions && habit.repetitions.length > 0) {
+            const init = habit.repetitions[0].init;
+            const end = habit.repetitions[habit.repetitions.length - 1].end != null
+              ? habit.repetitions[habit.repetitions.length - 1].end
+              : today.getTime();
+            habit.started =
+              habit.repetitions[habit.repetitions.length - 1].end == null;
+            habit.total_today = Math.floor((end - init) / 1000 / 60);
+          }
+        }
+
+        setHabits(habits);
+      });
     });
   };
 
