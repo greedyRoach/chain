@@ -146,8 +146,10 @@ export default class Sqlite {
     });
   }
 
-  async getRepetitions(onDone, date = new Date()) {
-    date.setHours(0, 0, 0, 0);
+  async getRepetitions(onDone, init = new Date(), end = new Date()) {
+    console.log(init, end)
+    init.setHours(0, 0, 0, 0);
+    end.setHours(24, 0, 0, 0);
 
     this.#db.transaction((tx) => {
       tx.executeSql(
@@ -157,6 +159,7 @@ export default class Sqlite {
             habit.name as habit_name,
             identity.identity_id as identity_id,
             identity.name as identity_name,
+            identity.weight as identity_weight,
             habit_repetition.init,
             habit_repetition.end
           FROM
@@ -164,9 +167,9 @@ export default class Sqlite {
             identity ON habit.identity_id = identity.identity_id INNER JOIN 
             habit_repetition ON habit_repetition.habit_id = habit.habit_id
           WHERE 
-            habit_repetition.init >= ?
+            habit_repetition.init >= ? AND (habit_repetition.end is null OR habit_repetition.end <= ?)
         `,
-        [date.getTime()],
+        [init.getTime(), end.getTime()],
         (_, { rows: { _array } }) => onDone(_array),
         (_, error) => {
           console.log("error getRepetitions", error);
